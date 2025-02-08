@@ -25,6 +25,7 @@ import { ZodValidationPipe } from 'src/validation-pipe';
 import * as mongoose from 'mongoose';
 import successHandler from 'src/success.handler';
 import { AuthGuard } from 'src/auth/guards/auth.guard';
+import { AppGateway } from 'src/app.gateway';
 
 @UseGuards(AuthGuard)
 @Controller('messages')
@@ -32,6 +33,7 @@ export class MessagesController {
   constructor(
     private readonly messagesService: MessagesService,
     private readonly usersService: UsersService,
+    private readonly appGateway: AppGateway,
   ) {}
 
   private async checkReceiver(id: string) {
@@ -75,13 +77,23 @@ export class MessagesController {
         ...createMessageDto,
       });
 
-      //socket io implementation
+      if (message) {
+        const messageJson = message.toJSON();
 
-      return successHandler(
-        'message successfully sent',
-        201,
-        message?.toJSON(),
-      );
+        //socket io implementation
+
+        //get target socket.io Id
+
+        const targetSocket = this.appGateway.userSocketMap[receiverId];
+
+        // console.log('target Socket', targetSocket)
+
+        if (targetSocket) {
+          this.appGateway.handleMessage(targetSocket, messageJson);
+        }
+
+        return successHandler('message successfully sent', 201, messageJson);
+      }
     } catch (error) {
       return errorHandler(
         'error in create message controller',

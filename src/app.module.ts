@@ -8,6 +8,9 @@ import { MongooseModule } from '@nestjs/mongoose';
 import { SocketsModule } from './sockets/sockets.module';
 import { MessagesModule } from './messages/messages.module';
 import { JwtModule } from '@nestjs/jwt';
+import { AppGateway } from './app.gateway';
+
+
 
 
 
@@ -18,8 +21,8 @@ import { JwtModule } from '@nestjs/jwt';
       expiresIn : '15m',
     },
     global : true
-  }) ],
+  })],
   controllers: [AppController],
-  providers: [AppService],
+  providers: [AppService, AppGateway],
 })
 export class AppModule {}

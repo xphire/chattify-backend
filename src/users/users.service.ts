@@ -55,7 +55,7 @@ export class UsersService {
       });
   }
 
-  async update(id : string , profilePic : string) : Promise<User | null> {
+  async update(id : string , profilePic : string) : Promise<UserDocument | null> {
    
 
     return this.userModel.findByIdAndUpdate(

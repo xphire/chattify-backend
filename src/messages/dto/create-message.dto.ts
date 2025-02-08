@@ -4,7 +4,7 @@ import { ApiProperty } from '@nestjs/swagger';
 
 export const CreateMessageSchema = object({
     text : string(),
-    image : string()
+    image : string().nullable()
 })
 .strict()
 .partial()

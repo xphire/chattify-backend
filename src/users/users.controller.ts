@@ -10,13 +10,11 @@ import {
   HttpException,
   HttpStatus,
   UseGuards,
-  Req
+  Req,
+  Res,
 } from '@nestjs/common';
 import { UsersService } from './users.service';
-import {
-  CreateUserDto,
-  CreateUserSchema,
-} from './dto/create-user.dto';
+import { CreateUserDto, CreateUserSchema } from './dto/create-user.dto';
 import { UpdateUserDto, UpdateUserSchema } from './dto/update-user.dto';
 import { ZodValidationPipe } from 'src/validation-pipe';
 import errorHandler from 'src/error.handler';
@@ -27,7 +25,9 @@ import { User } from './schemas/user.schema';
 import { AuthGuard } from 'src/auth/guards/auth.guard';
 import { UserRequest } from 'src/main';
 import uploadImage from 'src/upload.image';
-
+import { ConfigService } from '@nestjs/config';
+import { JwtService } from '@nestjs/jwt';
+import { Response } from 'express';
 
 export function stripPassword(user: User) {
   const { password, ...rest } = user;
@@ -47,11 +47,16 @@ export function resolveUserDocument(user: UserDocument) {
 
 @Controller('users')
 export class UsersController {
-  constructor(private readonly usersService: UsersService) {}
+  constructor(
+    private readonly usersService: UsersService,
+    private readonly configService: ConfigService,
+    private readonly jwtService: JwtService,
+  ) {}
 
   @Post('user')
   async createUserController(
     @Body(new ZodValidationPipe(CreateUserSchema)) createUserDto: CreateUserDto,
+    @Res({ passthrough: true }) response: Response,
   ): Promise<ControllerReturnType> {
     try {
       const user = await this.usersService.create(createUserDto);
@@ -62,6 +67,19 @@ export class UsersController {
           HttpStatus.INTERNAL_SERVER_ERROR,
         );
       }
+
+      const jwtPayload = {
+        sub: user._id,
+      };
+
+      const token = this.jwtService.sign(jwtPayload, {
+        secret: this.configService.get('JWT_SECRET_KEY'),
+      });
+
+      response.cookie('auth_token', token, {
+         httpOnly: true,
+         secure: process.env['NODE_ENV'] === 'production'
+      });
 
       return successHandler(
         'user successfully created',
@@ -78,12 +96,15 @@ export class UsersController {
     }
   }
 
-
   @UseGuards(AuthGuard)
   @Get('all')
-  async findAllExcept(@Req() request : UserRequest): Promise<ControllerReturnType> {
+  async findAllExcept(
+    @Req() request: UserRequest,
+  ): Promise<ControllerReturnType> {
     try {
-      const users = await this.usersService.findAllExceptCurrent(request.userId);
+      const users = await this.usersService.findAllExceptCurrent(
+        request.userId,
+      );
 
       if (users) {
         return successHandler(
@@ -105,21 +126,18 @@ export class UsersController {
 
   @UseGuards(AuthGuard)
   @Get('user')
-  async findOne(
-    @Req() request: UserRequest
-  ): Promise<ControllerReturnType> {
+  async findOne(@Req() request: UserRequest): Promise<ControllerReturnType> {
     try {
-      const user = await this.usersService.findOne({id : request.userId, stripPassword : true});
+      const user = await this.usersService.findOne({
+        id: request.userId,
+        stripPassword: true,
+      });
 
       if (!user) {
         throw new NotFoundException('user not found');
       }
 
-      return successHandler(
-        'user successfully fetched',
-        200,
-        user,
-      );
+      return successHandler('user successfully fetched', 200, user);
     } catch (error) {
       return errorHandler(
         'error in findOne user controller',
@@ -129,30 +147,26 @@ export class UsersController {
     }
   }
 
-
   @UseGuards(AuthGuard)
   @Patch('user/update-profile')
   async update(
-    @Req() request : UserRequest,
+    @Req() request: UserRequest,
     @Body(new ZodValidationPipe(UpdateUserSchema)) updateUserDto: UpdateUserDto,
   ): Promise<ControllerReturnType> {
     try {
-      const {profilePic } = updateUserDto;
+      const { profilePic } = updateUserDto;
 
-      const id = request.userId
+      const id = request.userId;
 
-      const imageUrl = await uploadImage(profilePic)
+      const imageUrl = await uploadImage(profilePic);
 
-      const updatedUser = await this.usersService.update(
-        id,
-        imageUrl,
-      );
+      const updatedUser = await this.usersService.update(id, imageUrl);
 
       if (updatedUser) {
         return successHandler(
           'user successfully updated',
           200,
-          resolveUser(updatedUser),
+          resolveUserDocument(updatedUser),
         );
       }
     } catch (error) {
